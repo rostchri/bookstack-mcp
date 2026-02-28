@@ -25,7 +25,7 @@ export interface Page {
   slug: string;
   html: string;
   markdown: string;
-  text: string;
+  text?: string;
   created_at: string;
   updated_at: string;
   owned_by: number;
@@ -155,6 +155,12 @@ export class BookStackClient {
     return `${this.baseUrl}/search?term=${encodedQuery}`;
   }
 
+  private getPlainText(page: Page): string {
+    if (page.markdown) return page.markdown;
+    if (page.html) return page.html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return '';
+  }
+
   // Enhanced response helpers
   private enhanceBookResponse(book: Book): any {
     const lastUpdated = this.formatDate(book.updated_at);
@@ -174,7 +180,8 @@ export class BookStackClient {
   private async enhancePageResponse(page: Page): Promise<any> {
     const lastUpdated = this.formatDate(page.updated_at);
     const created = this.formatDate(page.created_at);
-    const contentPreview = page.text ? `${page.text.substring(0, 200)}${page.text.length > 200 ? '...' : ''}` : 'No content preview available';
+    const plainText = this.getPlainText(page);
+    const contentPreview = plainText ? `${plainText.substring(0, 200)}${plainText.length > 200 ? '...' : ''}` : 'No content preview available';
     const url = await this.generatePageUrl(page);
 
     return {
@@ -185,7 +192,7 @@ export class BookStackClient {
       created_friendly: created,
       content_preview: contentPreview,
       content_info: `Page created ${created}, last updated ${lastUpdated}`,
-      word_count: page.text ? page.text.split(' ').length : 0,
+      word_count: plainText ? plainText.split(/\s+/).filter(w => w.length > 0).length : 0,
       location: `Book ID ${page.book_id}${page.chapter_id ? `, Chapter ID ${page.chapter_id}` : ''}`
     };
   }
@@ -460,8 +467,7 @@ export class BookStackClient {
       throw new Error('Write operations are disabled. Set BOOKSTACK_ENABLE_WRITE=true to enable.');
     }
     const response = await this.client.post('/pages', data);
-    const fullPage = await this.client.get(`/pages/${response.data.id}`);
-    return await this.enhancePageResponse(fullPage.data);
+    return await this.enhancePageResponse(response.data);
   }
 
   async updatePage(id: number, data: {
@@ -473,8 +479,7 @@ export class BookStackClient {
       throw new Error('Write operations are disabled. Set BOOKSTACK_ENABLE_WRITE=true to enable.');
     }
     const response = await this.client.put(`/pages/${id}`, data);
-    const fullPage = await this.client.get(`/pages/${response.data.id}`);
-    return await this.enhancePageResponse(fullPage.data);
+    return await this.enhancePageResponse(response.data);
   }
 
   async deletePage(id: number): Promise<void> {
@@ -630,7 +635,8 @@ export class BookStackClient {
           if (result.type === 'page' && result.id) {
             const fullPage = await this.client.get(`/pages/${result.id}`);
             const pageData = fullPage.data;
-            contentPreview = pageData.text?.substring(0, 200) || contentPreview;
+            const plainText = pageData.markdown || (pageData.html ? pageData.html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '');
+            contentPreview = plainText?.substring(0, 200) || contentPreview;
             contextualInfo = `Updated in book: ${pageData.book?.name || 'Unknown Book'}`;
             if (pageData.chapter) {
               contextualInfo += `, chapter: ${pageData.chapter.name}`;

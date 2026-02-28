@@ -460,7 +460,8 @@ export class BookStackClient {
       throw new Error('Write operations are disabled. Set BOOKSTACK_ENABLE_WRITE=true to enable.');
     }
     const response = await this.client.post('/pages', data);
-    return await this.enhancePageResponse(response.data);
+    const fullPage = await this.client.get(`/pages/${response.data.id}`);
+    return await this.enhancePageResponse(fullPage.data);
   }
 
   async updatePage(id: number, data: {
@@ -472,7 +473,8 @@ export class BookStackClient {
       throw new Error('Write operations are disabled. Set BOOKSTACK_ENABLE_WRITE=true to enable.');
     }
     const response = await this.client.put(`/pages/${id}`, data);
-    return await this.enhancePageResponse(response.data);
+    const fullPage = await this.client.get(`/pages/${response.data.id}`);
+    return await this.enhancePageResponse(fullPage.data);
   }
 
   async deletePage(id: number): Promise<void> {
